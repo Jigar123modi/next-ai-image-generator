@@ -1,4 +1,5 @@
 "use client";
+
 import { Todo } from "@prisma/client";
 import { useState, useEffect, useCallback } from "react";
 import Img from "./img";
@@ -8,7 +9,7 @@ export default function Home() {
     id: 0,
     title: "",
     imageUrl: "",
-    dueDate: new Date(), // set the due date to today
+    dueDate: new Date(),
     createdAt: new Date(),
   };
 
@@ -16,11 +17,12 @@ export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch todos from the server and update the state
+  // Fetch todos from the API
   const fetchTodos = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch("/api/todos");
+      if (!res.ok) throw new Error("Failed to fetch todos");
       const data = await res.json();
       setTodos(data);
     } catch (error) {
@@ -30,37 +32,34 @@ export default function Home() {
     }
   }, []);
 
-  // Fetch todos on initial render
   useEffect(() => {
     fetchTodos();
-  }, []);
+  }, [fetchTodos]);
 
   // Handle input change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const fieldValue = name === "dueDate" ? new Date(value) : value;
-
     setNewTodo((prev) => ({
       ...prev,
-      [name]: fieldValue,
+      [name]: name === "dueDate" ? new Date(value) : value,
     }));
   };
 
   // Add a new todo
   const handleAddTodo = async () => {
     if (!newTodo.title.trim()) return;
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTodo),
       });
-      if (!res.ok) {
-        throw new Error("Failed to add todo");
-      }
+      if (!res.ok) throw new Error("Failed to add todo");
+
+      const newItem = await res.json();
+      setTodos((prevTodos) => [...prevTodos, newItem]);
       setNewTodo({ ...initialTodo });
-      setTodos([...todos, await res.json()]);
     } catch (error) {
       console.error("Failed to add todo:", error);
     } finally {
@@ -70,16 +69,15 @@ export default function Home() {
 
   // Delete a todo
   const handleDeleteTodo = async (id: number) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(`/api/todos/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        const findIndex = todos.findIndex((todo) => todo.id === id);
-        todos.splice(findIndex, 1);
-        setTodos([...todos]);
-      }
+      const res = await fetch(`/api/todos/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete todo");
+
+      // Remove the deleted todo from the list, I don't like to use filter here.
+      const findIndex = todos.findIndex((todo) => todo.id === id);
+      todos.splice(findIndex, 1);
+      setTodos([...todos]);
     } catch (error) {
       console.error("Failed to delete todo:", error);
     } finally {
